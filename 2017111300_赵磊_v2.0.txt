@@ -1,0 +1,1730 @@
+
+
+
+
+
+                        Token Binding over HTTP
+                      draft-ietf-tokbind-https-11
+                   
+
+                        姓名：赵磊
+                        学号：2017111300
+                        邮箱：onebrolei@qq.com
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+---------------------------上面为封面----------------------------------
+
+
+
+
+
+
+
+Internet Engineering Task Force                                 A. Popov
+Internet-Draft                                               M. Nystroem
+Intended status: Standards Track                         Microsoft Corp.
+Expires: May 19, 2018                                    D. Balfanz, Ed.
+                                                              A. Langley
+                                                               N. Harper
+                                                             Google Inc.
+                                                               J. Hodges
+                                                                  PayPal
+                                                       November 15, 2017
+
+
+                        Token Binding over HTTP
+                      draft-ietf-tokbind-https-11
+
+Abstract
+
+   This document describes a collection of mechanisms that allow HTTP
+   servers to cryptographically bind security tokens (such as cookies
+   and OAuth tokens) to TLS connections.
+
+   本文档描述了一系列允许HTTP服务器把安全令牌（如cookies和OAuth令牌）加密
+绑定到TLS连接的机制。
+
+   We describe both first-party and federated scenarios.  In a first-
+   party scenario, an HTTP server is able to cryptographically bind the
+   security tokens it issues to a client, and which the client
+   subsequently returns to the server, to the TLS connection between the
+   client and server.  Such bound security tokens are protected from
+   misuse since the server can generally detect if they are replayed
+   inappropriately, e.g., over other TLS connections.
+
+   我们描述第一方和联合的场景。在第一方场景中，一个HTTP服务器能够把它发送给
+用户的安全令牌（客户随后将其返回给服务器）加密绑定到客户和服务器之间的TLS连
+接上。这样的绑定安全令牌被防止误用，因为服务器通常可以检测它们是否被不恰当
+地重播，例如通过其他TLS连接。
+
+   Federated token bindings, on the other hand, allow servers to
+   cryptographically bind security tokens to a TLS connection that the
+   client has with a different server than the one issuing the token.
+
+   另一方面，联合令牌绑定允许服务器将安全令牌加密地绑定到客户端与发布令牌的
+服务器不同的服务器所具有的TLS连接上。
+
+   This Internet-Draft is a companion document to The Token Binding
+   Protocol.
+
+   本互联网草案是“令牌绑定协议”的配套文件。
+
+Status of This Memo
+
+   This Internet-Draft is submitted in full conformance with the
+   provisions of BCP 78 and BCP 79.
+
+   Internet-Drafts are working documents of the Internet Engineering
+   Task Force (IETF).  Note that other groups may also distribute
+   working documents as Internet-Drafts.  The list of current Internet-
+   Drafts is at https://datatracker.ietf.org/drafts/current/.
+
+   Internet-Drafts are draft documents valid for a maximum of six months
+   and may be updated, replaced, or obsoleted by other documents at any
+
+
+
+Popov, et al.             Expires May 19, 2018                  [Page 1]
+
+Internet-Draft           Token Binding over HTTP           November 2017
+
+
+   time.  It is inappropriate to use Internet-Drafts as reference
+   material or to cite them other than as "work in progress."
+
+   This Internet-Draft will expire on May 19, 2018.
+
+Copyright Notice
+
+   Copyright (c) 2017 IETF Trust and the persons identified as the
+   document authors.  All rights reserved.
+
+   This document is subject to BCP 78 and the IETF Trust's Legal
+   Provisions Relating to IETF Documents
+   (https://trustee.ietf.org/license-info) in effect on the date of
+   publication of this document.  Please review these documents
+   carefully, as they describe your rights and restrictions with respect
+   to this document.  Code Components extracted from this document must
+   include Simplified BSD License text as described in Section 4.e of
+   the Trust Legal Provisions and are provided without warranty as
+   described in the Simplified BSD License.
+
+Table of Contents
+
+   1.  Introduction  . . . . . . . . . . . . . . . . . . . . . . . .   3
+     1.1.  Requirements Language . . . . . . . . . . . . . . . . . .   4
+   2.  The Sec-Token-Binding HTTP Request Header Field . . . . . . .   4
+     2.1.  HTTPS Token Binding Key Pair Scoping  . . . . . . . . . .   5
+   3.  TLS Renegotiation . . . . . . . . . . . . . . . . . . . . . .   6
+   4.  First-Party Use Cases . . . . . . . . . . . . . . . . . . . .   6
+   5.  Federation Use Cases  . . . . . . . . . . . . . . . . . . . .   6
+     5.1.  Introduction  . . . . . . . . . . . . . . . . . . . . . .   6
+     5.2.  Overview  . . . . . . . . . . . . . . . . . . . . . . . .   7
+     5.3.  HTTP Redirects  . . . . . . . . . . . . . . . . . . . . .   8
+     5.4.  Negotiated Key Parameters . . . . . . . . . . . . . . . .  10
+     5.5.  Federation Example  . . . . . . . . . . . . . . . . . . .  11
+   6.  Implementation Considerations . . . . . . . . . . . . . . . .  13
+   7.  Security Considerations . . . . . . . . . . . . . . . . . . .  13
+     7.1.  Security Token Replay . . . . . . . . . . . . . . . . . .  13
+     7.2.  Triple Handshake Vulnerability in TLS 1.2 and Older TLS
+           Versions  . . . . . . . . . . . . . . . . . . . . . . . .  14
+     7.3.  Sensitivity of the Sec-Token-Binding Header . . . . . . .  14
+     7.4.  Securing Federated Sign-On Protocols  . . . . . . . . . .  15
+   8.  Privacy Considerations  . . . . . . . . . . . . . . . . . . .  18
+     8.1.  Scoping of Token Binding Key Pairs  . . . . . . . . . . .  18
+     8.2.  Lifetime of Token Binding Key Pairs . . . . . . . . . . .  18
+     8.3.  Correlation . . . . . . . . . . . . . . . . . . . . . . .  19
+   9.  IANA Considerations . . . . . . . . . . . . . . . . . . . . .  19
+   10. Acknowledgements  . . . . . . . . . . . . . . . . . . . . . .  20
+   11. References  . . . . . . . . . . . . . . . . . . . . . . . . .  20
+
+
+
+Popov, et al.             Expires May 19, 2018                  [Page 2]
+
+Internet-Draft           Token Binding over HTTP           November 2017
+
+
+     11.1.  Normative References . . . . . . . . . . . . . . . . . .  20
+     11.2.  Informative References . . . . . . . . . . . . . . . . .  21
+   Authors' Addresses  . . . . . . . . . . . . . . . . . . . . . . .  22
+
+1.  Introduction
+
+   The Token Binding Protocol [I-D.ietf-tokbind-protocol] defines a
+   Token Binding ID for a TLS connection between a client and a server.
+   The Token Binding ID of a TLS connection is constructed using the
+   public key of a private-public key pair.  The client proves
+   possession of the corresponding private key.  This Token Binding key
+   pair is long-lived.  I.e., subsequent TLS connections between the
+   same client and server have the same Token Binding ID, unless
+   specifically reset, e.g., by the user.  When issuing a security token
+   (e.g., an HTTP cookie or an OAuth token [RFC6749]) to a client, the
+   server can include the Token Binding ID in the token, thus
+   cryptographically binding the token to TLS connections between that
+   particular client and server, and inoculating the token against abuse
+   (re-use, attempted impersonation, etc.) by attackers.
+
+   令牌绑定协议[I-D.ietf-tokbind-protocol]为客户和服务器之间的TLS连接定义了
+一个令牌绑定ID。TLS连接的令牌绑定ID是使用私钥-公钥对的公钥构造的。客户端证
+明拥有相应的私钥。这个令牌绑定密钥对是长期的。这就是说，同一客户端和服务器
+之间的后续TLS连接具有相同的令牌绑定ID，除非特别重置，例如由用户。当向客户端
+发布安全令牌（例如，HTTP cookie或OAuth令牌[RFC6749]）时，服务器可以将令牌绑
+定ID包括在令牌中，从而以加密地将令牌绑定到该特定客户端和服务器之间的TLS连接
+上， 然后接收令牌以防止攻击者的滥用（重新使用，企图冒充等）。
+
+   While the Token Binding Protocol [I-D.ietf-tokbind-protocol] defines
+   a message format for establishing a Token Binding ID, it does not
+   specify how this message is embedded in higher-level protocols.  The
+   purpose of this specification is to define how TokenBindingMessages
+   are embedded in HTTP (both versions 1.1 [RFC7230] and 2 [RFC7540]).
+   Note that TokenBindingMessages are only defined if the underlying
+   transport uses TLS.  This means that Token Binding over HTTP is only
+   defined when the HTTP protocol is layered on top of TLS (commonly
+   referred to as HTTPS).
+
+   尽管令牌绑定协议[I-D.ietf-tokbind-protocol]定义了用于建立令牌绑定ID的消
+息格式，但它并没有指定如何将这个消息嵌入到更高级的协议中。本规范的目的是定
+义如何在HTTP中嵌入TokenBindingMessages（版本1.1 [RFC7230]和2 [RFC7540]）。
+注意，TokenBindingMessages仅在底层传输使用TLS的情况下定义。这意味着通过HTT
+P的令牌绑定仅在HTTP协议在TLS（通常称为HTTPS）之上分层时才被定义。
+
+   HTTP clients establish a Token Binding ID with a server by including
+   a special HTTP header field in HTTP requests.  The HTTP header field
+   value is a base64url-encoded TokenBindingMessage.
+
+   HTTP客户端通过将一个特殊的HTTP头部域包括在HTTP请求中来建立和服务器之间
+的令牌绑定ID。这个HTTP头部域的值是一个base64url编码的TokenBindingMessage。
+
+   TokenBindingMessages allow clients to establish multiple Token
+   Binding IDs with the server, by including multiple TokenBinding
+   structures in the TokenBindingMessage.  By default, a client will
+   establish a provided Token Binding ID with the server, indicating a
+   Token Binding ID that the client will persistently use with the
+   server.  Under certain conditions, the client can also include a
+   referred Token Binding ID in the TokenBindingMessage, indicating a
+   Token Binding ID that the client is using with a different server
+   than the one that the TokenBindingMessage is sent to.  This is useful
+   in federation scenarios.
+
+   TokenBindingMessages允许客户端通过将多个TokenBinding结构放在TokenBindingMessage
+中来与服务器建立多个令牌绑定ID。默认情况下，客户端将与服务器建立一个提供好的令牌
+绑定ID，意味着客户端将永久使用这个令牌绑定ID。在某些情况下，客户端还可以在
+TokenBindingMessage中包含一个引用的令牌绑定标识，表示客户端正在和一个与
+TokenBindingMessage发送到的服务器不同的服务器使用的令牌绑定ID。 这在联合场景中很有用。
+
+
+
+
+
+
+Popov, et al.             Expires May 19, 2018                  [Page 3]
+
+Internet-Draft           Token Binding over HTTP           November 2017
+
+
+1.1.  Requirements Language
+
+   The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+   "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+   document are to be interpreted as described in [RFC2119].
+   
+   在这篇规范中的主要单词"MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+   "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL"应该被翻译成在[RFC2119]
+中描述的那样。
+
+2.  The Sec-Token-Binding HTTP Request Header Field
+
+   Once a client and server have negotiated the Token Binding Protocol
+   with HTTP/1.1 or HTTP/2 (see [I-D.ietf-tokbind-protocol] and
+   [I-D.ietf-tokbind-negotiation]), clients MUST include a Sec-Token-
+   Binding header field in their HTTP requests, and MUST include only
+   one such header field per HTTP request.  Also, The Sec-Token-Binding
+   header field MUST NOT be included in HTTP responses.  The ABNF of the
+   Sec-Token-Binding header field is (in [RFC7230] style, see also
+   Section 8.3 of [RFC7231]):
+   
+   一旦用户与服务器议定了基于HTTP/1.1 或 HTTP/2 的令牌绑定协议（看[I-D.ietf-tokbind-protocol]
+ 和[I-D.ietf-tokbind-negotiation]），客户端必须在它的HTTP请求中包含Sec-Token-Binding头部域，
+并且必须在每个请求中只包含一个这样的头部域。并且，这个Sec-Token-BInding头部域一定不能包含
+在HTTP响应包中。Sec-Token-Binding头部域的ABNF是（在[RFC7230]规范中，也参见[RFC7231]的第8.3节）：
+
+     Sec-Token-Binding = EncodedTokenBindingMessage
+
+   The header field name is Sec-Token-Binding and its single value,
+   EncodedTokenBindingMessage, is a base64url encoding of a single
+   TokenBindingMessage, as defined in [I-D.ietf-tokbind-protocol], using
+   the URL- and filename-safe character set described in Section 5 of
+   [RFC4648], with all trailing padding characters '=' omitted and
+   without the inclusion of any line breaks, whitespace, or other
+   additional characters.
+   
+   这个头部与的名字是Sec-Token-Binding，其单值EncodedTokenBindingMessage是一个单一
+TokenBindingMessage的base64url编码，如[ID.ietf-tokbind-protocol]中所定义，使用在
+[RFC4648]的第5部分中所描述的URL-和filename-safe字符集 ，所有尾部填充字符'='省略，
+并且不包含任何换行符，空格或其他附加字符。
+
+   For example:
+   例如：
+
+     Sec-Token-Binding: <base64url-encoded TokenBindingMessage>
+
+   If the server receives more than one Sec-Token-Binding header field
+   in an HTTP request, then the server MUST reject the message with a
+   400 (Bad Request) HTTP status code.  Additionally, the Sec-Token-
+   Binding header field:
+
+      SHOULD NOT be stored by origin servers on PUT requests,
+
+      MAY be listed by a server in a Vary response header field, and,
+
+      MUST NOT be used in HTTP trailers.
+
+   如果服务器在一个HTTP请求中接收到了不止一个Sec-Token-Binding头部域，
+那么这个服务器必须拒绝这个消息并回应一个400（Bad Request）状态码。此外，
+这个Sec-Token-Binding头部域：
+      不应该被原始服务器存储在PUT请求上，
+      可以被服务器列在一个Vary响应头域中，并且，
+      一定不能被用在HTTP trailer中
+
+   The TokenBindingMessage MUST contain one TokenBinding structure with
+   TokenBindingType of provided_token_binding, which MUST be signed with
+   the Token Binding private key used by the client for connections
+   between itself and the server that the HTTP request is sent to
+   (clients use different Token Binding key pairs for different servers,   
+
+
+
+Popov, et al.             Expires May 19, 2018                  [Page 4]
+
+Internet-Draft           Token Binding over HTTP           November 2017
+
+
+   see Section 2.1 below).  The Token Binding ID established by this
+   TokenBinding is called a Provided Token Binding ID.
+
+   TokenBindingMessage必须包含一个标有provided_token_binding令牌绑定类型
+的TokenBinding结构，这个结构必须被签署被客户端用来证明自己和HTTP请求发送到
+的服务器之间连接的令牌绑定私钥。(客户端对不同的服务器使用不同的令牌绑定密
+钥对看下面的2.1节）。被这个TokenBinding建立起来的Token Binding ID被叫做
+Provided Token Binding ID。
+
+   The TokenBindingMessage MAY also contain one TokenBinding structure
+   with TokenBindingType of referred_token_binding, as specified in
+   Section 5.3.  In addition to the latter, or rather than the latter,
+   the TokenBindingMessage MAY contain other TokenBinding structures.
+   This is use case-specific, and such use cases are outside the scope
+   of this specification.
+
+   TokenBindingMessage也可以包含一个标有referred_token_binding令牌绑定类型
+的TokenBinding结构，如章节5.3所述。除了后者，或者不是后者，TokenBindingMessage
+可以包含其他的TokenBinding结构。这是特定用例，并且这种用例超出了本规范的范围。   
+
+   A TokenBindingMessage is validated by the server as described in
+   Section 4.2.  ("Server Processing Rules") of
+   [I-D.ietf-tokbind-protocol].  If validation fails and a Token Binding
+   is rejected, any associated bound tokens MUST also be rejected by the
+   server.  HTTP requests containing invalid tokens MUST be rejected.
+   In this case, the server application MAY return HTTP status code 400
+   (Bad Request) or proceed with an application-specific invalid token
+   response (e.g., directing the client to re-authenticate and present a
+   different token), or terminate the connection.
+
+   TokenBindingMessage由服务器验证，如4.2节所述那样。[I-D.ietf-tokbind
+-protocol]中的“服务器处理规则”。如果验证失败并且一个令牌绑定被拒绝，
+所有相关的绑定的令牌也一定被服务器拒绝。包含无效令牌的HTTP请求必须被拒绝。
+在这种情况下，服务器应用程序可以返回HTTP状态码400（Bad Request）或以特定
+于应用程序的无效令牌响应方式来处理（例如，指示客户端重新验证并呈现不同的
+令牌）或终止连接。
+
+   In HTTP/2, the client SHOULD use Header Compression [RFC7541] to
+   avoid the overhead of repeating the same header field in subsequent
+   HTTP requests.
+ 
+   在HTTP/2中，客户端应该用头部压缩[RFC7541]来避免在后续的HTTP请求中重复
+相同的头域的开销。
+
+2.1.  HTTPS Token Binding Key Pair Scoping
+
+   HTTPS is used in conjunction with various application protocols and
+   application contexts, in various ways.  For example, general-purpose
+   Web browsing is one such HTTP-based application context.  Within the
+   latter context, HTTP cookies [RFC6265] are typically utilized for
+   state management, including client authentication.  A related, though
+   distinct, example of other HTTP-based application contexts is where
+   OAuth tokens [RFC6749] are utilized to manage authorization for
+   third-party application access to resources.  The token scoping rules
+   of these two examples can differ: the scoping rules for cookies are
+   concisely specified in [RFC6265], whereas OAuth is a framework and
+   defines various token types with various scopings, some of which are
+   determined by the encompassing application.
+
+   HTTPS以各种方式与各种应用程序协议和应用程序上下文结合使用。 例如，通
+用Web浏览就是一种基于HTTP的应用程序上下文。 在后一种情况下，HTTP Cookie 
+[RFC6265]通常用于状态管理，包括客户端身份验证。 其他基于HTTP的应用程序上
+下文的一个相关但不同的例子是OAuth令牌[RFC6749]用于管理第三方应用程序访问
+资源的授权。 这两个示例的令牌范围规则可能有所不同：[RFC6265]中简洁地规
+定了cookie的作用域规则，而OAuth则是一个框架并定义了各种标记类型，其中一
+些标记类型由包含应用程序确定。
+
+   The scoping of Token Binding key pairs generated by Web browsers for
+   use in first-party and federation use cases defined in this
+   specification (Section 5), and intended for binding HTTP cookies,
+   MUST be no wider than the granularity of "effective top-level domain
+   (public suffix) + 1" (eTLD+1).  I.e., the scope of Token Binding key
+   pairs is no wider than the scope at which cookies can be set (see
+   [RFC6265]), but MAY be more narrow if cookies are scoped more
+   narrowly.
+   
+   由Web浏览器生成的用于本规范（第5节）中定义的第一方和联合用例的用来绑定
+HTTP cookie的令牌绑定密钥对的范围，不得大于“有效顶级 域名（公共后缀）+ 1“
+（eTLD + 1）。 即，令牌绑定密钥对的范围不超过可以设置cookie的范围（参见
+[RFC6265]），但是如果cookie的范围更狭窄，则它的范围可能更窄。
+
+Popov, et al.             Expires May 19, 2018                  [Page 5]
+
+Internet-Draft           Token Binding over HTTP           November 2017
+
+   Key pairs used to bind other application tokens, such as OAuth tokens
+   or OpenID Connect ID Tokens, SHOULD generally adhere to the above
+   eTLD+1 scoping requirement for those tokens being employed in first-
+   party or federation scenarios.  Applications other than Web browsers
+   MAY use different key pair scoping rules.  See also Section 8.1,
+   below.
+
+   用于绑定其他应用程序令牌（例如OAuth令牌或OpenID Connect ID令牌）的密钥
+对通常应该遵守上述对第一方或联合方案中使用的令牌的eTLD + 1范围要求。 除
+Web浏览器以外的应用程序可以使用不同的密钥对范围规则。 另见下面的第8.1节。
+
+   Scoping rules for other HTTP-based application contexts are outside
+   the scope of this specification.
+
+   其他基于HTTP的应用程序上下文的范围规则不在本规范的范围之内。
+
+3.  TLS Renegotiation
+
+   Token Binding over HTTP/1.1 [RFC7230] can be performed in combination
+   with TLS renegotiation.  In this case, renegotiation MUST only occur
+   between a client's HTTP request and the server's response, the client
+   MUST NOT send any pipelined requests, and the client MUST NOT
+   initiate renegotiation.  (I.e., the client may only send a
+   renegotiation ClientHello in response to the server's HelloRequest.)
+   These conditions ensure that both the client and the server can
+   clearly identify which TLS Exported Keying Material value [RFC5705]
+   to use when generating or verifying the TokenBindingMessage.  This
+   also prevents a TokenBindingMessage from being split across TLS
+   renegotiation boundaries.  (I.e., due to TLS message fragmentation -
+   see Section 6.2.1 of [RFC5246].)
+
+   通过HTTP / 1.1绑定令牌[RFC7230]可以与TLS重新协商结合使用。 在这种情况
+下，重新协商只能发生在客户端的HTTP请求和服务器的响应之间，客户端不能发送
+任何流水线请求，客户端也不能发起重新协商。 （也就是说，客户端可以只响应
+服务器的HelloRequest发送重新协商ClientHello）。这些条件确保客户端和服务
+器能够清楚地识别在生成或验证TokenBindingMessage时使用哪个TLS Exported Keying 
+Material值[RFC5705]。 这也防止TokenBindingMessage在TLS重新协商边界上被分割。
+（即，由于TLS消息分段 - 参见[RFC5246]的第6.2.1节）。
+
+4.  First-Party Use Cases
+
+   In a first-party use case (also known as a "same-site" use case), an
+   HTTP server issues a security token such as a cookie (or similar) to
+   a client, and expects the client to return the security token at a
+   later time, e.g., in order to authenticate.  Binding the security
+   token to the TLS connection between client and server protects the
+   security token from misuse, since the server can detect if the
+   security token is replayed inappropriately, e.g., over other TLS
+   connections.
+
+   在第一方用例（也称为“同一站点”用例）中，HTTP服务器向客户端发出诸如
+cookie（或类似的）的安全令牌，并期望客户端稍后将安全令牌返回，例如为了验
+证。 将安全令牌绑定到客户端和服务器之间的TLS连接可防止安全令牌被滥用，因
+为服务器可以检测安全令牌是否被不恰当地重播，例如在其他TLS连接上。
+
+   See Section 5 of [I-D.ietf-tokbind-protocol] for general guidance
+   regarding binding of security tokens and their subsequent validation.
+
+   请参阅[I-D.ietf-tokbind-protocol]的第5部分，了解关于安全令牌绑定及其
+后续验证的一般指导。
+
+5.  Federation Use Cases
+    联合用例
+
+5.1.  Introduction
+
+   For privacy reasons, clients use different Token Binding key pairs to
+   establish Provided Token Binding IDs with different servers.  As a
+   result, a server cannot bind a security token (such as an OAuth token
+   or an OpenID Connect ID Token [OpenID.Core]) to a TLS connection that
+   the client has with a different server.  This is, however, a common
+
+
+
+Popov, et al.             Expires May 19, 2018                  [Page 6]
+
+Internet-Draft           Token Binding over HTTP           November 2017
+
+
+   requirement in federation scenarios: For example, an Identity
+   Provider may wish to issue an identity token to a client and
+   cryptographically bind that token to the TLS connection between the
+   client and a Relying Party.
+
+   出于隐私的原因，客户端使用不同的令牌绑定密钥对与不同的服务器建立
+Provided Token Binding ID。 因此，服务器无法将安全令牌（例如OAuth令牌
+或OpenID Connect ID令牌[OpenID.Core]）绑定到客户端与其他服务器之间的TLS
+连接。 但是，这是联合方案中的一个常见要求：例如，身份提供商可能希望向客
+户端颁发身份令牌，并将该令牌加密绑定到客户端和依赖方之间的TLS连接。
+
+   In this section, we describe mechanisms to achieve this.  The common
+   idea among these mechanisms is that a server (called the Token
+   Consumer in this document) signals to the client that it should
+   reveal the Provided Token Binding ID that is used between the client
+   and itself, to another server (called the Token Provider in this
+   document).  Also common across the mechanisms is how the Token
+   Binding ID is revealed to the Token Provider: The client uses the
+   Token Binding Protocol [I-D.ietf-tokbind-protocol], and includes a
+   TokenBinding structure in the Sec-Token-Binding HTTP header field
+   defined above.  What differs between the various mechanisms is how
+   the Token Consumer signals to the client that it should reveal the
+   Token Binding ID to the Token Provider.  Below, we specify one such
+   mechanism, which is suitable for redirect-based interactions between
+   Token Consumers and Token Providers.
+
+   在本节中，我们描述了实现这一点的机制。 这些机制的共同点是，一个服务器
+（在本文档中称为令牌消费者）向客户发出信号，告诉客户应该将在客户端和其自
+身之间使用的Provided Token Binding ID显示给另一个服务器（ 在这个文件中称为
+令牌提供者）。 在机制中还常见的是令牌绑定ID如何显示给令牌提供者：客户端使用
+令牌绑定协议（ID.ietf-tokbind-protocol），并且在Sec-Token-Binding HTTP头部
+字段中包括上面定义过的TokenBinding结构。各种机制之间的不同之处在于，令牌消
+费者如何向客户端发信号告知其应该向令牌提供者揭示令牌绑定ID。 下面我们指定一
+个这样的机制，它适用于令牌消费者和令牌提供者之间基于重定向的交互。
+
+5.2.  Overview
+
+   In a Federated Sign-On protocol, an Identity Provider issues an
+   identity token to a client, which sends the identity token to a
+   Relying Party to authenticate itself.  Examples of this include
+   OpenID Connect (in which the identity token is called an "ID Token")
+   and SAML (in which the identity token is a SAML assertion).
+
+   在联合登录协议中，身份提供者向客户端发送身份令牌，客户端将身份令牌
+发送给依赖方进行身份验证。 这方面的例子包括OpenID Connect（其中身份令牌
+称为“ID令牌”）和SAML（其中身份令牌是SAML断言）。
+
+   To better protect the security of the identity token, the Identity
+   Provider may wish to bind the identity token to the TLS connection
+   between the client and the Relying Party, thus ensuring that only
+   said client can use the identity token.  The Relying Party will
+   compare the Token Binding ID (or a cryptographic hash of it) in the
+   identity token with the Token Binding ID (or a hash thereof) of the
+   TLS connection between this Relying Party and the client.
+
+   为了更好地保护身份令牌的安全性，身份提供者可能希望将身份令牌绑定到
+客户端和依赖方之间的TLS连接，从而确保只有所述客户端可以使用该身份令牌。
+依赖方将会把身份令牌中的令牌绑定ID（或者它的加密哈希值）和依赖方与客户之间
+的TLS连接的令牌绑定ID进行对比。
+
+   This is an example of a federation scenario, which more generally can
+   be described as follows:
+
+   这是一个联合场景的例子，可以更一般的描述为下面这样：
+
+
+   o  A Token Consumer causes the client to issue a token request to the
+      Token Provider.  The goal is for the client to obtain a token and
+      then use it with the Token Consumer.
+
+   o  一个令牌消费者导致用户向令牌提供者发起一个令牌请求。目的是为了用户能够
+获得一个令牌并且在自己和令牌消费者之间使用它。
+
+   o  The client delivers the token request to the Token Provider.
+
+   o  客户端将令牌请求传递给令牌提供者。
+
+   o  The Token Provider issues the token.  The token is issued for the
+      specific Token Consumer who requested it (thus preventing
+      malicious Token Consumers from using tokens with other Token
+
+
+
+Popov, et al.             Expires May 19, 2018                  [Page 7]
+
+Internet-Draft           Token Binding over HTTP           November 2017
+
+
+      Consumers).  The token is, however, typically a bearer token,
+      meaning that any client can use it with the Token Consumer, not
+      just the client to which it was issued.
+
+   o  令牌提供者产生令牌。这个令牌是为了需要它的具体令牌消费者产生的（
+从而防止恶意令牌消费者与其他令牌消费者使用令牌）。然而，令牌通常是不记名
+令牌，意味着任何客户端都可以与令牌消费者一起使用它，而不仅仅是它被发送给
+的客户端。
+
+   o  Therefore, in the previous step, the Token Provider may want to
+      include in the token the Token Binding ID (or a cryptographic hash
+      of it) that the client uses when communicating with the Token
+      Consumer, thus binding the token to the client's Token Binding key
+      pair.  The client proves possession of the private key when
+      communicating with the Token Consumer through the Token Binding
+      Protocol [I-D.ietf-tokbind-protocol], and uses the corresponding
+      public key of this key pair as a component of the Token Binding
+      ID.  Comparing the Token Binding ID from the token to the Token
+      Binding ID established with the client allows the Token Consumer
+      to verify that the token was sent to it by the legitimate client.
+
+   o  因此，在前面的步骤中，令牌提供者或许想要在令牌中包含客户用来和令牌提供者
+进行通信时所用的令牌绑定ID（或者它的加密哈希），从而把令牌绑定到客户端的
+令牌绑定密钥对上。客户端和令牌消费者通过令牌绑定协议[I-D.ietf-tokbind-protocol]
+进行通信时，要证明拥有私钥，并且要用这个密钥对中相应的公钥作为令牌绑定ID的一个
+组件。比较令牌中的令牌绑定ID和客户建立的令牌绑定ID允许令牌消费者验证令牌是
+被合法的用户发送过来的。
+
+   o  To allow the Token Provider to include the Token Binding ID in the
+      token, the Token Binding ID (between client and Token Consumer)
+      must therefore be communicated to the Token Provider along with
+      the token request.  Communicating a Token Binding ID involves
+      proving possession of a private key and is described in the Token
+      Binding Protocol [I-D.ietf-tokbind-protocol].
+
+   o  为了允许令牌提供者在令牌中包括令牌绑定ID，令牌绑定ID（在客户端和令
+牌消费者之间）因此必须与令牌请求一起传送给令牌提供者。传送令牌绑定ID涉及
+证明拥有私钥，并在令牌绑定协议[I-D.ietf-tokbind-protocol]中进行了描述。
+
+   The client will perform this last operation (proving possession of a
+   private key that corresponds to a Token Binding ID between the client
+   and the Token Consumer while delivering the token request to the
+   Token Provider) only if the Token Consumer requests the client to do
+   so.
+   
+   客户端只有在令牌消费者要求客户端做的时候才会进行最后一步操作（在把令牌请
+求发送给令牌提供者的时候证明其拥有客户端和令牌消费者之间的与令牌绑定ID
+相应的私钥）。
+
+   Below, we specify how Token Consumers can signal this request in
+   redirect-based federation protocols.  Note that this assumes that the
+   federated sign-on flow starts at the Token Consumer, or at the very
+   least, includes a redirect from the Token Consumer to the Token
+   Provider.  It is outside the scope of this document to specify
+   similar mechanisms for flows that do not include such redirects.
+
+   下面，我们指定令牌使用者如何在基于重定向的联合协议中发出这个请求的信号。
+请注意，这假定联合登录流程始于令牌消费者，或者至少包含从令牌消费者到令牌
+提供者的重定向。 指定类似的不包含这种重定向的流程的机制在本文档的范围之外。
+
+5.3.  HTTP Redirects
+
+   When a Token Consumer redirects the client to a Token Provider as a
+   means to deliver the token request, it SHOULD include an Include-
+   Referred-Token-Binding-ID HTTP response header field in its HTTP
+   response.  The ABNF of the Include-Referred-Token-Binding-ID header
+   is (in [RFC7230] style, see also Section 8.3 of [RFC7231]):
+
+     Include-Referred-Token-Binding-ID = "true"
+
+   Where the header field name is "Include-Referred-Token-Binding-ID",
+   and the field-value of "true" is case-insensitive.  For example:
+
+
+
+Popov, et al.             Expires May 19, 2018                  [Page 8]
+
+Internet-Draft           Token Binding over HTTP           November 2017
+
+
+     Include-Referred-Token-Binding-ID: true
+
+   Including this response header field signals to the client that it
+   should reveal, to the Token Provider, the Token Binding ID used
+   between itself and the Token Consumer.  In the absence of this
+   response header field, the client will not disclose any information
+   about the Token Binding used between the client and the Token
+   Consumer to the Token Provider.
+
+   当令牌消费者将客户端重定向到令牌提供者作为传递令牌请求的手段时，它
+应该在HTTP响应中包含一个Include- Referred-Token-Binding-ID HTTP响应头域。
+Include-Referred-Token-Binding-ID头部的ABNF（[RFC7230]风格，参见[RFC7231]
+的第8.3节）：
+
+   Include-Referred-Token-Binding-ID = "true"
+
+这里的头部字段名是"Include-Referred-Token-Binding-ID",并且"true"的字段值是
+不区分大小写的。例如：
+
+   Include-Referred-Token-Binding-ID: true
+
+   将这个响应头字段信号包括给客户端（客户端显示令牌提供者在其本身和令牌消费
+者之间使用的令牌绑定ID）。 在没有这个响应头字段的情况下，客户端不会将关于在
+令牌提供者和客户端之间使用的令牌绑定的任何信息透露给令牌提供者。
+
+   As illustrated in Section 5.5, when a client receives this header
+   field, it should take the TokenBindingID of the provided TokenBinding
+   from the referrer and create a referred TokenBinding with it to
+   include in the TokenBindingMessage on the redirect request.  In other
+   words, the Token Binding message in the redirect request to the Token
+   Provider now includes one provided binding and one referred binding,
+   the latter constructed from the binding between the client and the
+   Token Consumer.
+
+   如5.5节所示，当客户端收到这个头域时，它应该从引用者处获取提供的令牌绑定
+中的TokenBindingID，并创建一个引用的TokenBinding，使其包含在重定向请求的
+TokenBindingMessage中。 换句话说，发送给令牌提供者的重定向请求中的
+Token Binding消息现在包括一个提供的绑定和一个引用的绑定，后者由客户端和
+令牌消费者之间的绑定构建。
+
+   When a client receives the Include-Referred-Token-Binding-ID header,
+   it includes the referred token binding even if both the Token
+   Provider and the Token Consumer fall under the same eTLD+1 and the
+   provided and referred token binding IDs are the same.  Note that the
+   referred token binding is sent only on the request resulting from the
+   redirect and not on any subsequent requests to the Token Provider.
+
+   当一个客户端接收到Include-Referred-Token-Binding-ID头，它要包含引用的
+令牌绑定，即使令牌提供者和令牌消费者落到相同的eTLD+1上并且提供的令牌绑定ID
+和绑定的令牌绑定ID相同。请注意，引用的令牌绑定仅在重定向产生的请求上，而
+不是随后的任何请求上发送给令牌提供者。
+
+   If the Include-Referred-Token-Binding-ID header field is received in
+   response to a request that did not include the Token-Binding header
+   field, the client MUST ignore the Include-Referred-Token-Binding-ID
+   header field.
+
+   如果在返回给没有包含令牌绑定头部域的请求的响应中接收到了Include-
+Referred-Token-Binding-ID头部字段，必须忽视这个Include-Referred-Token-
+Binding-ID字段。
+
+   This header field has only meaning if the HTTP status code is 301,
+   302, 303, 307 or 308, and MUST be ignored by the client for any other
+   status codes.  If the client supports the Token Binding Protocol, and
+   has negotiated the Token Binding Protocol with both the Token
+   Consumer and the Token Provider, it already sends the Sec-Token-
+   Binding header field to the Token Provider with each HTTP request (as
+   described in Section 2 above).
+
+   这个头部字段只有在HTTP状态码是301,302, 303, 307 或者 308时才有意义，对于
+其它的状态码一定要被客户端忽略。如果客户端支持令牌绑定协议，并且已经与令牌消
+费者和提供者协商了这个协议他已经在每个发送给令牌提供者的HTTP请求中发送了
+Sec-Token-Binding头部字段（如上面第2节所述）。
+
+   The TokenBindingMessage SHOULD contain a TokenBinding with
+   TokenBindingType referred_token_binding.  If included, this
+   TokenBinding MUST be signed with the Token Binding private key used
+   by the client for connections between itself and the Token Consumer
+   (more specifically, the server that issued the Include-Referred-
+   Token-Binding-ID response header field).  The Token Binding ID
+   established by this TokenBinding is called a Referred Token Binding
+   ID.
+
+   TokenBindingMessage应该包含一个带有referred_token_binding令牌绑定类型
+的令牌绑定。如果包含了，这个TokenBinding务必用客户端用于自己和Token Consumer
+（更具体地说，发出Include-Referred-Token-Binding-ID响应头域的服务器）之
+间连接的Token Binding私钥签名。这个被令牌绑定建立起来的令牌绑定ID叫做
+引用的令牌绑定ID。
+
+
+
+
+
+Popov, et al.             Expires May 19, 2018                  [Page 9]
+
+Internet-Draft           Token Binding over HTTP           November 2017
+
+
+   As described above, the TokenBindingMessage MUST additionally contain
+   a Provided Token Binding ID, i.e., a TokenBinding structure with
+   TokenBindingType of provided_token_binding, which MUST be signed with
+   the Token Binding private key used by the client for connections
+   between itself and the Token Provider (more specifically, the server
+   that the token request is being sent to).
+
+   如上面所述，TokenBindingMessage也必须额外包含一个提供的令牌绑定ID，
+即，一个带有provided_token_binding的令牌绑定类型的必须被签署用户用于
+自己和令牌提供者（更具体地说，令牌请求被发送到的服务器）之间连接的令牌
+绑定私钥的令牌绑定结构。
+
+   If, for some deployment-specific reason, the initial Token Provider
+   ("TP1") needs to redirect the client to another Token Provider
+   ("TP2"), rather than directly back to the Token Consumer, it can be
+   accommodated using the header fields defined in this specification in
+   the following fashion ("the redirect-chain approach"):
+
+   如果出于某种部署特定的原因，初始令牌提供者（“TP1”）需要将客户端重定
+向到另一个令牌提供者（“TP2”），而不是直接返回给令牌消费者，则可以使用
+在本说规范中以以下方式定义的头部字段（“重定向链方法”）：
+
+      Initially, the client is redirected to TP1 by the Token Consumer
+      ("TC"), as described above.  Upon receiving the client's request,
+      containing a TokenBindingMessage which contains both provided and
+      referred TokenBindings (for TP1 and TC, respectively), TP1
+      responds to the client with a redirect response containing the
+      Include-Referred-Token-Binding-ID header field and directing the
+      client to send a request to TP2.  This causes the client to follow
+      the same pattern and send a request containing a
+      TokenBindingMessage which contains both provided and referred
+      TokenBindings (for TP2 and TP1, respectively) to TP2.  Note that
+      this pattern can continue to further Token Providers.  In this
+      case, TP2 issues a security token, bound to the client's
+      TokenBinding with TP1, and sends a redirect response to the client
+      pointing to TP1.  TP1 in turn constructs a security token for the
+      Token Consumer, bound to the TC's referred TokenBinding which had
+      been conveyed earlier, and sends a redirect response pointing to
+      the TC, containing the bound security token, to the client.
+
+      最初，客户端被令牌消费者（“TC”）重定向到TP1，如上所述。在接收到
+包含提供和引用的TokenBinding（分别用于TP1和TC）的TokenBindingMessage的情
+况下，TP1使用包含Include-Referred-Token-Binding-ID头字段并且指导用户向TP2
+发送一个请求的响应来响应客户端。这导致客户端遵循相同的模式，并发送包含
+TokenBindingMessage的请求到TP2，该TokenBindingMessage包含提供和引用的
+TokenBindings（分别用于TP2和TP1）。请注意，这种模式可以继续到更深层次的
+令牌提供者。在这种情况下，TP2发出一个安全令牌，绑定到客户端与TP1的TokenBinding，
+并向客户端发送一个指向TP1的重定向响应。 TP1依次为令牌消费者构造一个安全令牌，
+绑定到前面已经传送过的TC引用的TokenBinding，并向客户端发送一个指向包含绑定
+的安全令牌的TC的重定向响应。
+
+   The above is intended as only a non-normative example.  Details are
+   specific to deployment contexts.  Other approaches are possible, but
+   are outside the scope of this specification.
+
+   以上只是作为一个非规范的例子。 细节特定于部署上下文。 其他的方法是可
+能的，但不在本规范的范围内。
+
+5.4.  Negotiated Key Parameters
+
+   The TLS Extension for Token Binding Protocol Negotiation
+   [I-D.ietf-tokbind-negotiation] allows the server and client to
+   negotiate the parameters (signature algorithm, length) of the Token
+   Binding key pair.  It is possible that the Token Binding ID used
+   between the client and the Token Consumer, and the Token Binding ID
+   used between the client and Token Provider, use different key
+   parameters.  The client MUST use the key parameters negotiated with
+   the Token Consumer in the referred_token_binding TokenBinding of the
+   TokenBindingMessage, even if those key parameters are different from
+   the ones negotiated with the server that the header field is sent to.
+
+   令牌绑定协议协商的TLS扩展[I-D.ietf-tokbind-negotiation]允许服务器和客
+户端协商令牌绑定密钥对的参数（签名算法，长度）。 客户端和令牌消费者之间
+使用的令牌绑定ID，客户端和令牌提供者之间使用的令牌绑定ID可能使用不同的密
+钥参数。 客户端必须使用TokenBindingMessage的referenced_token_binding 
+令牌绑定中的关键参数与Token Consumer协商，即使这些关键参数与头字段发送到
+的服务器协商的关键参数不同。
+
+
+Popov, et al.             Expires May 19, 2018                 [Page 10]
+
+Internet-Draft           Token Binding over HTTP           November 2017
+
+
+   Token Providers SHOULD support all the Token Binding key parameters
+   specified in [I-D.ietf-tokbind-protocol].  If a token provider does
+   not support the key parameters specified in the
+   referred_token_binding TokenBinding in the TokenBindingMessage, it
+   MUST NOT issue a bound token.
+
+   令牌提供者应该支持在[I-D.ietf-tokbind-protocol]中指定的所有令牌绑定密
+钥参数。 如果令牌提供者不支持在TokenBindingMessage的referenced_token_
+binding 的令牌绑定中指定的密钥参数，它不能发出绑定的令牌。
+
+5.5.  Federation Example
+
+   The diagram below shows a typical HTTP Redirect-based Web Browser SSO
+   Profile (no artifact, no callbacks), featuring binding of, e.g., a
+   TLS Token Binding ID into an OpenID Connect ID Token.
+
+   下图显示了一个典型的基于HTTP重定向的Web浏览器SSO配置文件（没有工件，
+没有回调），描述了例如将TLS令牌绑定ID绑定到OpenID Connect ID令牌中的绑定。
+
+                                  Legend:
+
+   +------------+------------------------------------------------------+
+   | EKM:       | TLS Exported Keying Material [RFC5705]               |
+   | {EKMn}Ksm: | EKM for server "n", signed by private key of TBID    |
+   |            | "m", where "n" must represent server receiving the   |
+   |            | ETBMSG, if a conveyed TB's type is                   |
+   |            | provided_token_binding, then m = n, else if TB's     |
+   |            | type is referred_token_binding, then m != n. E.g.,   |
+   |            | see step 1b in diagram below.                        |
+   | ETBMSG:    | "Sec-Token-Binding" HTTP header field conveying an   |
+   |            | EncodedTokenBindingMessage, in turn conveying        |
+   |            | TokenBinding (TB)struct(s), e.g.: ETBMSG[[TB]] or    |
+   |            | ETBMSG[[TB1],[TB2]]                                  |
+   | ID Token:  | the ID Token in OpenID Connect, it is the semantic   |
+   |            | equivalent of a SAML "authentication assertion". "ID |
+   |            | Token w/TBIDn" denotes a "token bound" ID Token      |
+   |            | containing TBIDn.                                    |
+   | Ks & Kp:   | private (aka secret) key, and public key,            |
+   |            | respectively, of client-side Token Binding key pair  |
+   | OIDC:      | OpenID Connect                                       |
+   | TB:        | TokenBinding struct containing signed EKM, TBID, and |
+   |            | TB type, e.g.:                                       |
+   |            | [{EKM1}Ks1,TBID1,provided_token_binding]             |
+   | TBIDn:     | Token Binding ID for client and server n's token-    |
+   |            | bound TLS association. TBIDn contains Kpn.           |
+   +------------+------------------------------------------------------+
+
+ Client,                      Token Consumer,       Token Provider,
+ aka:                         aka:                  aka:
+ User Agent                   OpenID Client,        OpenID Provider,
+                              OIDC Relying Party,   OIDC Provider,
+                              SAML Relying Party    SAML Identity Provider
+                              [ server "1" ]        [ server "2" ]
+ +--------+                        +----+                +-----+
+ | Client |                        | TC |                | TP  |
+
+
+
+Popov, et al.             Expires May 19, 2018                 [Page 11]
+
+Internet-Draft           Token Binding over HTTP           November 2017
+
+
+ +--------+                        +----+                +-----+
+     |                               |                      |
+     |                               |                      |
+     |                               |                      |
+     | 0. Client interacts w/TC      |                      |
+     | over HTTPS, establishes Ks1 & Kp1, TBID1             |
+     | ETBMSG[[{EKM1}Ks1,TBID1,provided_token_binding]]     |
+     |------------------------------>|                      |
+     |                               |                      |
+     |                               |                      |
+     |                               |                      |
+     | 1a. OIDC ID Token request, aka|                      |
+     | "Authentication Request", conveyed with              |
+     | HTTP response header field of:                       |
+     | Include-Referred-Token-Binding-ID:true               |
+     | any security-relevant cookies |                      |
+     | should contain TBID1          |                      |
+   +<- - - - - - - - - - - - - - - - |                      |
+   . | (redirect to TP via 301, 302, |                      |
+   . |  303, 307, or 308)            |                      |
+   . |                               |                      |
+   +------------------------------------------------------->|
+     | 1b. opens HTTPS w/TP,                                |
+     | establishes Ks2, Kp2, TBID2;                         |
+     | sends GET or POST with                               |
+     | ETBMSG[[{EKM2}Ks2,TBID2,provided_token_binding],     |
+     |        [{EKM2}Ks1,TBID1,referred_token_binding]]     |
+     | as well as the ID Token request                      |
+     |                               |                      |
+     |                               |                      |
+     |                               |                      |
+     | 2. user authentication (if applicable,               |
+     |    methods vary, particulars are out of scope)       |
+     |<====================================================>|
+     | (TP generates ID Token for TC containing TBID1, may  |
+     |  also set cookie(s) containing TBID2 and/or TBID1,   |
+     |  details vary, particulars are out of scope)         |
+     |                               |                      |
+     |                               |                      |
+     |                               |                      |
+     | 3a. ID Token containing Kp1, issued for TC,          |
+     |    conveyed via OIDC "Authentication Response"       |
+   +<- - - - - - - - - - - - - - - - - - - - - - - - - - - -|
+   . |   (redirect to TC)            |                      |
+   . |                               |                      |
+   . |                               |                      |
+   +-------------------------------->|                      |
+     | 3b. HTTPS GET or POST with                           |
+
+
+
+Popov, et al.             Expires May 19, 2018                 [Page 12]
+
+Internet-Draft           Token Binding over HTTP           November 2017
+
+
+     | ETBMSG[[{EKM1}Ks1,TBID1,provided_token_binding]]     |
+     | conveying Authn Response containing                   |
+     | ID Token w/TBID1, issued for TC                      |
+     |                               |                      |
+     |                               |                      |
+     |                               |                      |
+     | 4. user is signed-on, any security-relevant cookie(s)|
+     | that are set SHOULD contain TBID1                    |
+     |<------------------------------|                      |
+     |                               |                      |
+     |                               |                      |
+
+6.  Implementation Considerations
+
+   HTTPS-based applications may have multi-party use cases other than,
+   or in addition to, the HTTP redirect-based signaling-and-conveyance
+   of referred token bindings, as presented above in Section 5.3.
+
+   基于HTTPS的应用程序除了或不同于5.3节介绍的基于HTTP重定向的引用的令
+牌绑定的信令和传送外，可能还有多方使用情况。
+
+   Thus, generic Token Binding implementations intended to support any
+   HTTPS-based client-side application (e.g., so-called "native
+   applications"), should provide means for applications to have Token
+   Binding messages, containing Token Binding IDs of various
+   application-specified Token Binding types and for application-
+   specified TLS connections, conveyed over an application-specified
+   HTTPS connection, i.e., within the TokenBindingMessage conveyed by
+   the Sec-Token-Binding header field.
+
+   因此，旨在支持任何基于HTTPS的客户端应用程序（例如，所谓的“本地应用程
+序”）的通用令牌绑定实现应该提供用于具有令牌绑定消息的应用程序的手段，其
+包含各种应用程序指定的令牌绑定类型的令牌绑定ID和应用程序指定的TLS连接，通
+过应用程序指定的HTTPS连接（即在由Sec-Token-Binding标头字段传送的
+TokenBindingMessage内）传送。
+
+   However, such implementations MUST only convey Token Binding IDs to
+   servers if signaled to do so by an application.  For example, a
+   server can return an Include-Referred-Token-Binding-ID HTTP response
+   header field to a Web browser, thus signaling to the Token Binding
+   implementation in the Web browser that the server intends to convey
+   the Web browser's Token Binding ID to another server.  Other
+   signaling mechanisms are possible, and are specific to the
+   application layer protocol, but are outside the scope of this
+   specification.
+   
+   但是，如果由应用程序发送信号来做这件事，这些实现只能将令牌绑定ID传送给
+服务器。例如，服务器可以向Web浏览器返回Include-Referred-Token-Binding-ID 
+HTTP响应报头字段，从而向Web浏览器中的令牌绑定实现发送信号：服务器打算将
+Web浏览器的令牌绑定ID传送给另一台服务器。其他信令机制是可能的，并且是专用
+于应用层协议的，但是不在本规范的范围内。
+
+   NOTE:  See Section 8 ("Privacy Considerations"), for privacy guidance
+          regarding the use of this functionality.
+
+7.  Security Considerations
+
+7.1.  Security Token Replay
+
+   The goal of the Federated Token Binding mechanisms is to prevent
+   attackers from exporting and replaying tokens used in protocols
+   between the client and Token Consumer, thereby impersonating
+   legitimate users and gaining access to protected resources.  Although
+
+
+
+Popov, et al.             Expires May 19, 2018                 [Page 13]
+
+Internet-Draft           Token Binding over HTTP           November 2017
+
+
+   bound tokens can still be replayed by any malware present in clients
+   (which may be undetectable by a server), in order to export bound
+   tokens to other machines and successfully replay them, attackers also
+   need to export the corresponding Token Binding private keys.  Token
+   Binding private keys are therefore high-value assets and SHOULD be
+   strongly protected, ideally by generating them in a hardware security
+   module that prevents key export.
+
+   联合令牌绑定机制的目的是阻止攻击者传播和重播客户和和令牌消费者之间协议上的
+令牌，因此冒充合法用户并过的保护资源的访问权限。尽管绑定的令牌依然能被客户端
+恶意软件重播（或许不能被服务器检测到），为了把绑定的令牌成功地传播到其他机器上
+并重播它们，攻击者们也需要传播相关的令牌绑定私钥。令牌绑定私钥因此是高价值资产，
+需要强力保护，理想的方法是在硬件安全模块产生私钥来组织私钥传播。
+
+7.2.  Triple Handshake Vulnerability in TLS 1.2 and Older TLS Versions
+      TLS 1.2和旧TLS版本的三重握手漏洞
+
+   The Token Binding protocol relies on the exported key material (EKM)
+   value [RFC5705] to associate a TLS connection with a TLS Token
+   Binding.  The triple handshake attack [TRIPLE-HS] is a known
+   vulnerability in TLS 1.2 and older TLS versions, allowing the
+   attacker to synchronize keying material between TLS connections.  The
+   attacker can then successfully replay bound tokens.  For this reason,
+   the Token Binding protocol MUST NOT be negotiated with these TLS
+   versions, unless the Extended Master Secret [RFC7627] and
+   Renegotiation Indication [RFC5746] TLS extensions have also been
+   negotiated.
+
+   令牌绑定协议依赖传播的密钥材料（EKM）值[RFC5705]来将一个TLS连接联系到一个TLS
+令牌绑定。三握手攻击[ triple-hs ]是1.2及以上版本的TLS TLS的一个已知的漏洞，
+允许攻击者同步TLS连接之间的密钥材料材料。然后攻击者能够成功地重播绑定的
+令牌。正是因为这个原因，令牌绑定协议一定不能被那些TLS版本协商，除非
+Extended Master Secret [RFC7627] 和　Renegotiation Indication [RFC5746] TLS扩展
+也已经被协商。
+
+7.3.  Sensitivity of the Sec-Token-Binding Header
+
+   The purpose of the Token Binding protocol is to convince the server
+   that the client that initiated the TLS connection controls a certain
+   key pair.  For the server to correctly draw this conclusion after
+   processing the Sec-Token-Binding header field, certain secrecy and
+   integrity requirements must be met.
+
+　 令牌绑定协议的目的是让服务器信服产生TLS连接的客户端控制着某一密钥对，
+为了让服务器在处理了Sec-Token-Binding头部字段之后能正确产生这个结论，
+必须满足某些保密性和完整性要求。
+
+   For example, the client's Token Binding private key must be kept
+   secret by the client.  If the private key is not secret, then another
+   actor in the system could create a valid Token Binding header field,
+   impersonating the client.  This can render the main purpose of the
+   protocol - to bind bearer tokens to certain clients - moot.
+   Consider, for example, an attacker who obtained (perhaps through a
+   network intrusion) an authentication cookie that a client uses with a
+   certain server.  Consider further that the server bound that cookie
+   to the client's Token Binding ID precisely to thwart misuse of the
+   cookie.  If the attacker were to come into possession of the client's
+   private key, he could then establish a TLS connection with the server
+   and craft a Sec-Token-Binding header field that matches the binding
+   present in the cookie, thus successfully authenticating as the
+   client, and gaining access to the client's data at the server.  The
+   Token Binding protocol, in this case, did not successfully bind the
+   cookie to the client.
+
+   例如，客户端令牌绑定私钥必须被客户端保密。如果私钥不保密，那么系统中的
+另一个角色能产生一个正确的令牌绑定头部域，冒充这个客户端。这可以使协议的主
+要目的是将承载令牌绑定到某些客户端。 例如，考虑一个攻击者（可能通过网络入侵）
+获取客户端与特定服务器一起使用的身份验证Cookie。 进一步考虑服务器将该cookie
+绑定到客户端的令牌绑定ID，以防止滥用cookie。 如果攻击者拥有了客户的私钥，
+那么他可以与服务器建立一个TLS连接，并制作一个Sec-Token-Binding头域，该头
+域与cookie中存在的绑定相匹配，从而成功地作为客户端进行身份验证， 并在服务
+器上访问客户端的数据。 令牌绑定协议，在这种情况下，没有成功地绑定到客户端
+的cookie。
+
+   Likewise, we need integrity protection of the Sec-Token-Binding
+   header field.  A client should not be tricked into sending a Sec-
+
+
+
+Popov, et al.             Expires May 19, 2018                 [Page 14]
+
+Internet-Draft           Token Binding over HTTP           November 2017
+
+
+   Token-Binding header field to a server that contains Token Binding
+   messages about key pairs that the client does not control.  Consider
+   an attacker A that somehow has knowledge of the exported keying
+   material (EKM) for a TLS connection between a client C and a server
+   S.  (While that is somewhat unlikely, it is also not entirely out of
+   the question, since the client might not treat the EKM as a secret -
+   after all, a pre-image-resistant hash function has been applied to
+   the TLS master secret, making it impossible for someone knowing the
+   EKM to recover the TLS master secret.  Such considerations might lead
+   some clients to not treat the EKM as a secret.)  Such an attacker A
+   could craft a Sec-Token-Binding header field with A's key pair over
+   C's EKM.  If the attacker could now trick C into sending such a
+   header field to S, it would appear to S as if C controls a certain
+   key pair, when in fact it does not (the attacker A controls the key
+   pair).
+
+   同样，我们需要对Sec-Token-Binding头域的完整性保护。不应该欺骗客户端
+发送Sec-Token-Binding头域到服务器，该服务器包含有关客户端不能控制的密钥
+对的令牌绑定消息。考虑攻击者A以某种方式知道客户端C和服务器S之间的TLS连接
+的导出密钥材料（EKM）（虽然这是不太可能的，但也不是完全不可能的，因为客
+户端可能不把EKM作为一个秘密 - 毕竟，一个抗映像前的哈希函数已经被应用到
+TLS主密钥上，使得知道EKM的人不可能恢复TLS主密钥，这样的考虑可能会导致一
+些客户端不要把EKM作为秘密）。这样的攻击者A可以用A的密钥对在C的EKM上制作
+一个Sec-Token-Binding头域。如果攻击者现在可以诱骗C将这样一个头字段发送给
+S，那么对于S来说，就好像C控制某个密钥对一样，实际上它不（攻击者A控制密钥
+对）。
+
+   If A has a pre-existing relationship with S (perhaps has an account
+   on S), it now appears to the server S as if A is connecting to it,
+   even though it is really C.  (If the server S does not simply use
+   Token Binding IDs to identify clients, but also uses bound
+   authentication cookies, then A would also have to trick C into
+   sending one of A's cookies to S, which it can do through a variety of
+   means - inserting cookies through Javascript APIs, setting cookies
+   through related-domain attacks, etc.)  In other words, A tricked C
+   into logging into A's account on S.  This could lead to a loss of
+   privacy for C, since A presumably has some other way to also access
+   the account, and can thus indirectly observe A's behavior (for
+   example, if S has a feature that lets account holders see their
+   activity history on S).
+
+   如果A与S有一个预先存在的关系（可能在S上有一个帐户），现在对于服务器
+S来说就好像A正在连接到它，即使它真的是C.（如果服务器S不是简单地使用 令
+牌绑定ID来标识客户端，但也使用绑定的身份验证cookie，那么A也将欺骗C将A的
+cookie中的一个发送给S，这可以通过多种方式来完成 - 通过JavaScript API插入
+Cookie，设置Cookie 相关域攻击等等）。换句话说，A欺骗C在S上登录到A的账户。
+这可能导致C的隐私损失，因为A大概有其他方式可以访问账户，因此可以 间接观
+察A的行为（例如，如果S有一个功能，可以让账户持有人在S上看到他们的活动历
+史）。
+
+   Therefore, we need to protect the integrity of the Sec-Token-Binding
+   header field.  One eTLD+1 should not be able to set the Sec-Token-
+   Binding header field (through a DOM API or otherwise) that the User
+   Agent uses with another eTLD+1.  Employing the "Sec-" header field
+   prefix helps to meet this requirement by denoting the header field
+   name to be a "forbidden header name", see [fetch-spec].
+
+   因此，我们需要保护Sec-Token-Binding头域的完整性。 一个eTLD + 1不应
+该能设置用户代理使用另一个eTLD + 1的Sec-Token-Binding头域（通过DOM API
+或其他方式）。 使用“Sec-”头字段前缀有助于通过将头字段名称指定为“禁止
+头名称”来满足此要求，请参见[fetch-spec]。
+
+7.4.  Securing Federated Sign-On Protocols
+
+   As explained above, in a federated sign-in scenario, a client will
+   prove possession of two different Token Binding private keys to a
+   Token Provider: One private key corresponds to the "provided" Token
+   Binding ID (which the client normally uses with the Token Provider),
+   and the other is the Token Binding private key corresponding to the
+   "referred" Token Binding ID (which the client normally uses with the
+   Token Consumer).  The Token Provider is expected to issue a token
+   that is bound to the referred Token Binding ID.
+
+   如上所述，在联合登录的情况下，客户端将证明拥有两个不同的令牌绑定私钥
+给令牌提供者：一个私钥对应于“提供的”令牌绑定ID（客户端通常与提供者一起
+使用），另一个是“引用的”令牌绑定ID（客户端通常与令牌消费者一起使用）对
+应的令牌绑定私钥。 令牌提供者预计发出绑定到引用的令牌绑定ID的令牌。
+
+
+Popov, et al.             Expires May 19, 2018                 [Page 15]
+
+Internet-Draft           Token Binding over HTTP           November 2017
+
+
+   Both proofs (that of the provided Token Binding private key and that
+   of the referred Token Binding private key) are necessary.  To show
+   this, consider the following scenario:
+
+   这两种证据（所提供的令牌绑定私钥和所涉及的令牌绑定私钥的证据）都是必
+要的。为了证明这一点，考虑以下情形：
+
+   o  The client has an authentication token with the Token Provider
+      that is bound to the client's Token Binding ID used with that
+      Token Provider.
+
+      用户有一个和令牌提供者之间使用的认证，这个认证被绑定到用户和令牌
+提供者之间使用的令牌绑定ID上。
+
+   o  The client wants to establish a secure (i.e., free of men-in-the-
+      middle) authenticated session with the Token Consumer, but has not
+      done so yet (in other words, we are about to run the federated
+      sign-on protocol).
+
+      用户想要建立一个和令牌消费者之间的安全（即，没有中间人）认证的会话，
+但还没有这样做（换句话说，我们即将运行联合登录协议）。
+
+   o  A man-in-the-middle is allowed to intercept the connection between
+      client and Token Consumer or between Client and Token Provider (or
+      both).
+
+      允许中间人拦截客户端和令牌消费者之间的连接，或者客户端和令牌提供者
+（或两者）之间的连接。
+
+   The goal is to detect the presence of the man-in-the-middle in these
+   scenarios.
+
+   目的是检测在这些场景中中间人的存在。
+
+   First, consider a man-in-the-middle between the client and the Token
+   Provider.  Recall that we assume that the client possesses a bound
+   authentication token (e.g., cookie) for the Token Provider.  The man-
+   in-the-middle can intercept and modify any message sent by the client
+   to the Token Provider, and any message sent by the Token Provider to
+   the client.  (This means, among other things, that the man-in-the-
+   middle controls the Javascript running at the client in the origin of
+   the Token Provider.)  It is not, however, in possession of the
+   client's Token Binding private key.  Therefore, it can either choose
+   to replace the Token Binding ID in requests from the client to the
+   Token Provider, and create a Sec-Token-Binding header field that
+   matches the TLS connection between the man-in-the-middle and the
+   Token Provider, or it can choose to leave the Sec-Token-Binding
+   header field unchanged.  If it chooses the latter, the signature in
+   the Token Binding message (created by the original client on the
+   exported keying material (EKM) for the connection between client and
+   man-in-the-middle) will not match a signature on the EKM between man-
+   in-the-middle and the Token Provider.  If it chooses the former (and
+   creates its own signature, using its own Token Binding private key,
+   over the EKM for the connection between itself, the man-in-the-
+   middle, and Token Provider), then the Token Binding message will
+   match the connection between man-in-the-middle and Token Provider,
+   but the Token Binding ID in the message will not match the Token
+   Binding ID that the client's authentication token is bound to.
+   Either way, the man-in-the-middle is detected by the Token Provider,
+   but only if the proof of possession of the provided Token Binding
+   private key is required in the protocol (as is done above).
+
+   首先，考虑客户和令牌提供者之间的中间人（man-in-the-middle）。回想一下，
+我们假设客户端拥有绑定的令牌提供程序的身份验证令牌（例如，cookie）。中间
+人可以拦截和修改客户端发送给令牌提供者的任何消息，以及令牌提供者向客户端
+发送的任何消息。 （这意味着，中间人控制着在令牌提供者的源头上运行在客户端
+的Javascript）。然而，它并不拥有客户端的令牌绑定私钥。因此，它可以选择将
+来自客户端的发往令牌提供者的请求中的令牌绑定ID替换，并且创建匹配中间人与
+令牌提供者之间的TLS连接的Sec-Token-Binding头域，或者可以选择保持Sec-Token
+-Binding头域不变。如果选择后者，则令牌绑定消息中的签名（由原始客户端在导出
+的密钥材料（EKM）上为客户端和中间人（man-in-the-middle）之间的连接创建）将
+不匹配中间任何令牌提供者之间的EKM上的签名。如果它选择前者（并创建自己的签
+名，使用自己的令牌绑定私钥，通过EKM为自己，中间人和令牌提供者之间建立连接），
+那么令牌绑定消息将匹配中间人与令牌提供者之间的连接，但是消息中的令牌绑定ID
+将与客户端的认证令牌所绑定的令牌绑定ID不匹配。无论哪种方式，中间人都被令牌
+提供者检测到，但是在协议中只要求要求拥有所提供的令牌绑定私钥的证明（如上所
+述）。
+
+
+Popov, et al.             Expires May 19, 2018                 [Page 16]
+
+Internet-Draft           Token Binding over HTTP           November 2017
+
+
+   Next, consider the presence of a man-in-the-middle between client and
+   Token Consumer.  That man-in-the-middle can intercept and modify any
+   message sent by the client to the Token Consumer and any message sent
+   by the Token Consumer to the client.  The Token Consumer is the party
+   that redirects the client to the Token Provider.  In this case, the
+   man-in-the-middle controls the redirect URL and can tamper with any
+   redirect URL issued by the Token Consumer (as well as with any
+   Javascript running in the origin of the Token Consumer).  The goal of
+   the man-in-the-middle is to trick the Token Provider into issuing a
+   token bound to its Token Binding ID, not to the Token Binding ID of
+   the legitimate client.  To thwart this goal of the man-in-the-middle,
+   the client's referred Token Binding ID must be communicated to the
+   Token Producer in a manner that cannot be affected by the man-in-the-
+   middle (who, as we recall, can modify redirect URLs and Javascript at
+   the client).  Including the referred Token Binding structure in the
+   Sec-Token-Binding header field (as opposed to, say, including the
+   referred Token Binding ID in an application-level message as part of
+   the redirect URL) is one way to assure that the man-in-the-middle
+   between client and Token Consumer cannot affect the communication of
+   the referred Token Binding ID to the Token Provider.
+
+   接下来，考虑客户与令牌消费者之间存在的中间人。中间人可以拦截和修改由
+客户发送给令牌消费者的任何消息以及由令牌消费者发送给客户的任何消息。令牌
+消费者是将客户端重定向到令牌提供者的一方。在这种情况下，中间人控制重定向
+URL，并可以篡改由令牌消费者发出的任何重定向URL（以及在令牌消费者的源头中
+运行的任何Javascript）。中间人的目标是诱使令牌提供者发出绑定到其令牌绑定
+ID的令牌，而不是发给合法客户端的令牌绑定ID。为了阻止这个中间人的这个目标，
+客户端的引用令牌绑定ID必须以不受中间人影响的方式传送给令牌制作人（我们之
+前提到的，可以在客户端修改重定向URL和Javascript的人）。在Sec-Token-Binding
+头域中包括引用的令牌绑定结构（与在应用级别消息中包括引用的令牌绑定ID作为
+重定向URL的一部分相对）是确保客户端与令牌消费者之间的中间人不能影响引用的
+令牌绑定ID到令牌提供者的通信的一种方式。
+
+   Therefore, the Sec-Token-Binding header field in the federated sign-
+   on use case contains both: a proof of possession of the provided
+   Token Binding key, as well as a proof of possession of the referred
+   Token Binding key.
+
+   因此，在联合登陆场景中的Sec-Token-Binding头部字段包括这两种：提供的令
+牌绑定密钥的拥有的证明，和引用的令牌绑定密钥的拥有的证明。
+
+   Note that the presence of Token Binding does not relieve the Token
+   Provider and Token Consumer from performing various checks to ensure
+   the security of clients during federated sign-on protocols.  These
+   include the following:
+
+   请注意，令牌绑定的存在并不能减轻令牌提供者和令牌使用者执行各种检查以
+确保联合登录协议期间客户端的安全性的工作。 这些包括以下内容：
+
+   o  The Token Provider should not issue tokens to Token Consumers that
+      have been shown to act maliciously.  To aid in this, the
+      federation protocol should identify the Token Consumer to the
+      Token Provider (e.g., through OAuth client IDs or similar
+      mechanisms), and the Token Provider should ensure that tokens are
+      indeed issued to the Token Consumer identified in the token
+      request (e.g., by verifying that the redirect URI is associated
+      with the OAuth client ID.)
+
+      令牌提供者不应该向已显示为恶意行为的令牌消费者发放令牌。 为此，联
+合协议应该向令牌提供者标识令牌消费者（例如，通过OAuth客户端ID或类似的机制
+），并且令牌提供者应该确保令牌确实发放给令牌请求中标识的令牌消费者（例如
+通过验证重定向URI与OAuth客户端ID关联）。
+
+   o  The Token Consumer should verify that the tokens were issued for
+      it, and not some other token consumer.  To aid in this, the
+      federation protocol should include an audience parameter in the
+      token response, or apply equivalent mechanisms (the implicit OAuth
+      flow requires Token Consumers to identify themselves when they
+      exchange OAuth authorization codes for OAuth refresh tokens,
+      leaving it up to the Token Provider to verify that the OAuth
+      authorization was delivered to the correct Token Consumer).
+
+      令牌消费者应该确认令牌是为其发行的，而不是其他令牌消费者。 为此，
+联合协议应在令牌响应中包含受众参数，或应用等效机制（隐式OAuth流程要求令
+牌消费者在OAuth刷新令牌的OAuth授权代码交换时将自己标识出来，从而将其留给
+令牌提供者以验证OAuth授权是否传递给正确的令牌消费者）。
+
+
+Popov, et al.             Expires May 19, 2018                 [Page 17]
+
+Internet-Draft           Token Binding over HTTP           November 2017
+
+
+8.  Privacy Considerations
+
+8.1.  Scoping of Token Binding Key Pairs
+
+   Clients use different Token Binding key pairs for different servers,
+   so as to not allow Token Binding to become a tracking tool across
+   different servers.  However, the scoping of the Token Binding key
+   pairs to servers varies according to the scoping rules of the
+   application protocol (Section 4.1 of [I-D.ietf-tokbind-protocol]).
+
+   客户端为不同的服务器使用不同的令牌绑定密钥对，从而不允许令牌绑定成
+为跨越不同服务器的追踪工具。 但是，令牌绑定密钥对服务器的范围根据应用
+协议的范围规则而变化（[I-D.ietf-tokbind-protocol]的第4.1节）。
+
+   In the case of HTTP cookies, servers may use Token Binding to secure
+   their cookies.  These cookies can be attached to any sub-domain of
+   effective top-level domains (eTLDs), and clients therefore should use
+   the same Token Binding key pair across such subdomains.  This will
+   ensure that any server capable of receiving the cookie will see the
+   same Token Binding ID from the client, and thus be able to verify the
+   token binding of the cookie.  See Section 2.1, above.
+
+   在HTTP cookie的情况下，服务器可以使用令牌绑定来保护他们的cookie。 这
+些cookie可以附加到有效顶级域（eTLD）的任何子域，因此客户端应该在这些子
+域中使用相同的令牌绑定密钥对。 这将确保任何能够接收cookie的服务器都将
+看到与客户端相同的令牌绑定ID，从而能够验证cookie的令牌绑定。 见上文第
+2.1节。
+
+   If the client application is not a Web browser, it may have
+   additional knowledge about the relationship between different
+   servers.  For example, the client application might be aware of the
+   fact that two servers play the role of Relying Party and Identity
+   Provider in a federated sign-on protocol, and that they therefore
+   share the identity of the user.  In such cases, it is permissible to
+   use different Token Binding key pair scoping rules, such as using the
+   same Token Binding key pair for both the Relying Party and the
+   Identity Provider.  Absent such special knowledge, conservative key-
+   scoping rules should be used, assuring that clients use different
+   Token Binding key pairs with different servers.
+
+   如果客户端应用程序不是Web浏览器，则可能对不同服务器之间的关系有更多
+的了解。 例如，客户端应用程序可能意识到两个服务器在联合登录协议中扮演着
+依赖方和身份提供者的角色，因此他们共享用户的身份。 在这种情况下，允许使
+用不同的令牌绑定密钥对范围规则，例如对于依赖方和身份提供商都使用相同的令
+牌绑定密钥对。 如果没有这些特殊的知识，应该使用保守的键范围规则，保证客
+户端与不同的服务器使用不同的令牌绑定密钥对。
+
+8.2.  Lifetime of Token Binding Key Pairs
+
+   Token Binding key pairs do not have an expiration time.  This means
+   that they can potentially be used by a server to track a user for an
+   extended period of time (similar to a long-lived cookie).  HTTPS
+   clients such as Web user agents should therefore provide a user
+   interface for discarding Token Binding key pairs (similar to the
+   affordances provided to delete cookies).
+
+   令牌绑定密钥对没有到期时间。 这意味着它们可能被服务器用来追踪用户很
+长一段时间（类似于长期存在的cookie）。 因此，HTTPS客户端（例如Web用户代
+理）应该提供用于丢弃令牌绑定密钥对（类似于提供用于删除cookie的可供件）的
+用户界面。
+
+   If a user agent provides modes such as private browsing mode in which
+   the user is promised that browsing state such as cookies are
+   discarded after the session is over, the user agent should also
+   discard Token Binding key pairs from such modes after the session is
+   over.  Generally speaking, users should be given the same level of
+   control over lifetime of Token Binding key pairs as they have over
+   cookies or other potential tracking mechanisms.
+
+   如果用户代理提供诸如隐私浏览模式的模式（在这种模式中用户被承诺在会话
+结束后丢弃诸如cookie的浏览状态），那么在会话结束之后，用户代理还应丢弃来
+自这种模式的令牌绑定密钥对。 一般来说，用户应该对令牌绑定密钥对的生命周期
+具有与他们在cookie或者其他潜在的跟踪机制上所拥有的控制级别相同的控制级别。
+
+
+
+Popov, et al.             Expires May 19, 2018                 [Page 18]
+
+Internet-Draft           Token Binding over HTTP           November 2017
+
+
+8.3.  Correlation
+
+   An application's various communicating endpoints that receive Token
+   Binding IDs for TLS connections other than their own, obtain
+   information about the application's other TLS connections.  (In this
+   context, "an application" is a combination of client-side and server-
+   side components, communicating over HTTPS, where the client side may
+   be either or both Web browser-based or native application-based.)
+   These other Token Binding IDs can serve as correlation handles for
+   the endpoints of the other connections.  If the receiving endpoints
+   are otherwise aware of these other connections, then no additional
+   information is being exposed.  For instance, if in a redirect-based
+   federation protocol, the Identity Provider and Relying Party already
+   possess URLs for one another, also having Token Binding IDs for these
+   connections does not provide additional correlation information.  If
+   not, then, by providing the other Token Binding IDs, additional
+   information is exposed that can be used to correlate the other
+   endpoints.  In such cases, a privacy analysis of enabled correlations
+   and their potential privacy impacts should be performed as part of
+   the application design decisions of how, and whether, to utilize
+   Token Binding.
+
+   一个应用程序的接收不同于自己的TLS连接的令牌绑定ID的各种通信终端，获取
+有关应用程序的其他TLS连接的信息。 （在这种情况下，“应用程序”是客户端和
+服务器端组件的组合，通过HTTPS进行通信，其中客户端可以是基于Web浏览器的，
+也可以是基于本机应用程序的。）这些其他的令牌绑定ID可以作为其他连接终端的
+相关句柄。如果接收终端另外知道这些其他连接，则不会暴露额外的信息。例如，
+如果在基于重定向的联合协议中，身份提供者和依赖方已经拥有彼此的URL，并且具
+有这些连接的令牌绑定ID，则不提供额外的关联信息。如果不是，则通过提供其他
+令牌绑定ID，用于关联其他端点的附加信息被暴露。在这种情况下，启用相关性的隐
+私分析及其潜在的隐私影响应作为如何以及是否使用令牌绑定的应用设计决定的一
+部分来执行。
+
+   Also, Token Binding implementations must take care to only reveal
+   Token Binding IDs to other endpoints if the application associated
+   with a Token Binding ID signals to do so, see Section 6
+   ("Implementation Considerations").
+
+   此外，令牌绑定实现必须只有在与令牌绑定ID相关联的应用程序发出信号时，
+才小心地向其他端点揭露令牌绑定ID，请参阅第6节（“实施注意事项”）。
+
+   Finally, care should be taken to ensure that unrelated applications
+   do not obtain information about each other's Token Bindings.  For
+   instance, a Token Binding implementation shared between multiple
+   applications on a given system should prevent unrelated applications
+   from obtaining each other's Token Binding information.  This may be
+   accomplished by using techniques such as application isolation and
+   key segregation, depending upon system capabilities.
+
+   最后，应该注意确保不相关的应用程序不会获得有关彼此的令牌绑定信息。
+例如，给定系统上的多个应用程序之间共享的令牌绑定实现应当防止不相关的应
+用程序获取彼此的令牌绑定信息。 这可以通过使用诸如应用隔离和密钥隔离的
+技术来完成，这取决于系统能力。
+
+9.  IANA Considerations
+
+   Below are the Internet Assigned Numbers Authority (IANA) Permanent
+   Message Header Field registration information per [RFC3864].
+
+     Header field name:           Sec-Token-Binding
+     Applicable protocol:         HTTP
+     Status:                      standard
+     Author/Change controller:    IETF
+     Specification document(s):   this one
+
+
+
+
+
+
+Popov, et al.             Expires May 19, 2018                 [Page 19]
+
+Internet-Draft           Token Binding over HTTP           November 2017
+
+
+     Header field name:           Include-Referred-Token-Binding-ID
+     Applicable protocol:         HTTP
+     Status:                      standard
+     Author/Change controller:    IETF
+     Specification document(s):   this one
+
+10.  Acknowledgements
+
+   This document incorporates comments and suggestions offered by Eric
+   Rescorla, Gabriel Montenegro, Martin Thomson, Vinod Anupam, Anthony
+   Nadalin, Michael B.  Jones, Bill Cox, Nick Harper, Brian Campbell,
+   and others.
+
+11.  References
+
+11.1.  Normative References
+
+   [fetch-spec]
+              WhatWG, "Fetch", Living Standard ,
+              <https://fetch.spec.whatwg.org/>.
+
+   [I-D.ietf-tokbind-negotiation]
+              Popov, A., Nystrom, M., Balfanz, D., and A. Langley,
+              "Transport Layer Security (TLS) Extension for Token
+              Binding Protocol Negotiation", draft-ietf-tokbind-
+              negotiation-10 (work in progress), October 2017.
+
+   [I-D.ietf-tokbind-protocol]
+              Popov, A., Nystrom, M., Balfanz, D., Langley, A., and J.
+              Hodges, "The Token Binding Protocol Version 1.0", draft-
+              ietf-tokbind-protocol-16 (work in progress), October 2017.
+
+   [RFC2119]  Bradner, S., "Key words for use in RFCs to Indicate
+              Requirement Levels", BCP 14, RFC 2119,
+              DOI 10.17487/RFC2119, March 1997,
+              <https://www.rfc-editor.org/info/rfc2119>.
+
+   [RFC3864]  Klyne, G., Nottingham, M., and J. Mogul, "Registration
+              Procedures for Message Header Fields", BCP 90, RFC 3864,
+              DOI 10.17487/RFC3864, September 2004,
+              <https://www.rfc-editor.org/info/rfc3864>.
+
+   [RFC4648]  Josefsson, S., "The Base16, Base32, and Base64 Data
+              Encodings", RFC 4648, DOI 10.17487/RFC4648, October 2006,
+              <https://www.rfc-editor.org/info/rfc4648>.
+
+
+
+
+
+
+Popov, et al.             Expires May 19, 2018                 [Page 20]
+
+Internet-Draft           Token Binding over HTTP           November 2017
+
+
+   [RFC5246]  Dierks, T. and E. Rescorla, "The Transport Layer Security
+              (TLS) Protocol Version 1.2", RFC 5246,
+              DOI 10.17487/RFC5246, August 2008,
+              <https://www.rfc-editor.org/info/rfc5246>.
+
+   [RFC5705]  Rescorla, E., "Keying Material Exporters for Transport
+              Layer Security (TLS)", RFC 5705, DOI 10.17487/RFC5705,
+              March 2010, <https://www.rfc-editor.org/info/rfc5705>.
+
+   [RFC6265]  Barth, A., "HTTP State Management Mechanism", RFC 6265,
+              DOI 10.17487/RFC6265, April 2011,
+              <https://www.rfc-editor.org/info/rfc6265>.
+
+   [RFC7230]  Fielding, R., Ed. and J. Reschke, Ed., "Hypertext Transfer
+              Protocol (HTTP/1.1): Message Syntax and Routing",
+              RFC 7230, DOI 10.17487/RFC7230, June 2014,
+              <https://www.rfc-editor.org/info/rfc7230>.
+
+   [RFC7231]  Fielding, R., Ed. and J. Reschke, Ed., "Hypertext Transfer
+              Protocol (HTTP/1.1): Semantics and Content", RFC 7231,
+              DOI 10.17487/RFC7231, June 2014,
+              <https://www.rfc-editor.org/info/rfc7231>.
+
+   [RFC7541]  Peon, R. and H. Ruellan, "HPACK: Header Compression for
+              HTTP/2", RFC 7541, DOI 10.17487/RFC7541, May 2015,
+              <https://www.rfc-editor.org/info/rfc7541>.
+
+11.2.  Informative References
+
+   [OpenID.Core]
+              Sakimura, N., Bradley, J., Jones, M., de Medeiros, B., and
+              C. Mortimore, "OpenID Connect Core 1.0", August 2015,
+              <http://openid.net/specs/openid-connect-core-1_0.html>.
+
+   [RFC5746]  Rescorla, E., Ray, M., Dispensa, S., and N. Oskov,
+              "Transport Layer Security (TLS) Renegotiation Indication
+              Extension", RFC 5746, DOI 10.17487/RFC5746, February 2010,
+              <https://www.rfc-editor.org/info/rfc5746>.
+
+   [RFC6749]  Hardt, D., Ed., "The OAuth 2.0 Authorization Framework",
+              RFC 6749, DOI 10.17487/RFC6749, October 2012,
+              <https://www.rfc-editor.org/info/rfc6749>.
+
+   [RFC7540]  Belshe, M., Peon, R., and M. Thomson, Ed., "Hypertext
+              Transfer Protocol Version 2 (HTTP/2)", RFC 7540,
+              DOI 10.17487/RFC7540, May 2015,
+              <https://www.rfc-editor.org/info/rfc7540>.
+
+
+
+
+Popov, et al.             Expires May 19, 2018                 [Page 21]
+
+Internet-Draft           Token Binding over HTTP           November 2017
+
+
+   [RFC7627]  Bhargavan, K., Ed., Delignat-Lavaud, A., Pironti, A.,
+              Langley, A., and M. Ray, "Transport Layer Security (TLS)
+              Session Hash and Extended Master Secret Extension",
+              RFC 7627, DOI 10.17487/RFC7627, September 2015,
+              <https://www.rfc-editor.org/info/rfc7627>.
+
+   [TRIPLE-HS]
+              Bhargavan, K., Delignat-Lavaud, A., Fournet, C., Pironti,
+              A., and P. Strub, "Triple Handshakes and Cookie Cutters:
+              Breaking and Fixing Authentication over TLS. IEEE
+              Symposium on Security and Privacy", 2014.
+
+Authors' Addresses
+
+   Andrei Popov
+   Microsoft Corp.
+   USA
+
+   Email: andreipo@microsoft.com
+
+
+   Magnus Nystroem
+   Microsoft Corp.
+   USA
+
+   Email: mnystrom@microsoft.com
+
+
+   Dirk Balfanz (editor)
+   Google Inc.
+   USA
+
+   Email: balfanz@google.com
+
+
+   Adam Langley
+   Google Inc.
+   USA
+
+   Email: agl@google.com
+
+
+   Nick Harper
+   Google Inc.
+   USA
+
+   Email: nharper@google.com
+
+
+
+
+Popov, et al.             Expires May 19, 2018                 [Page 22]
+
+Internet-Draft           Token Binding over HTTP           November 2017
+
+
+   Jeff Hodges
+   PayPal
+   USA
+
+   Email: Jeff.Hodges@paypal.com
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Popov, et al.             Expires May 19, 2018                 [Page 23]
