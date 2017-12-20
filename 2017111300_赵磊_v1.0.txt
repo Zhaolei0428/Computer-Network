@@ -1025,7 +1025,14 @@ Internet-Draft           Token Binding over HTTP           November 2017
    strongly protected, ideally by generating them in a hardware security
    module that prevents key export.
 
+   联合令牌绑定机制的目的是阻止攻击者传播和重播客户和和令牌消费者之间协议上的
+令牌，因此冒充合法用户并过的保护资源的访问权限。尽管绑定的令牌依然能被客户端
+恶意软件重播（或许不能被服务器检测到），为了把绑定的令牌成功地传播到其他机器上
+并重播它们，攻击者们也需要传播相关的令牌绑定私钥。令牌绑定私钥因此是高价值资产，
+需要强力保护，理想的方法是在硬件安全模块产生私钥来组织私钥传播。
+
 7.2.  Triple Handshake Vulnerability in TLS 1.2 and Older TLS Versions
+      TLS 1.2和旧TLS版本的三重握手漏洞
 
    The Token Binding protocol relies on the exported key material (EKM)
    value [RFC5705] to associate a TLS connection with a TLS Token
@@ -1038,6 +1045,13 @@ Internet-Draft           Token Binding over HTTP           November 2017
    Renegotiation Indication [RFC5746] TLS extensions have also been
    negotiated.
 
+   令牌绑定协议依赖传播的密钥材料（EKM）值[RFC5705]来将一个TLS连接联系到一个TLS
+令牌绑定。三握手攻击[ triple-hs ]是1.2及以上版本的TLS TLS的一个已知的漏洞，
+允许攻击者同步TLS连接之间的密钥材料材料。然后攻击者能够成功地重播绑定的
+令牌。正是因为这个原因，令牌绑定协议一定不能被那些TLS版本协商，除非
+Extended Master Secret [RFC7627] 和　Renegotiation Indication [RFC5746] TLS扩展
+也已经被协商。
+
 7.3.  Sensitivity of the Sec-Token-Binding Header
 
    The purpose of the Token Binding protocol is to convince the server
@@ -1045,6 +1059,10 @@ Internet-Draft           Token Binding over HTTP           November 2017
    key pair.  For the server to correctly draw this conclusion after
    processing the Sec-Token-Binding header field, certain secrecy and
    integrity requirements must be met.
+
+　 令牌绑定协议的目的是让服务器信服产生TLS连接的客户端控制着某一密钥对，
+为了让服务器在处理了Sec-Token-Binding头部字段之后能正确产生这个结论，
+必须满足某些保密性和完整性要求。
 
    For example, the client's Token Binding private key must be kept
    secret by the client.  If the private key is not secret, then another
@@ -1062,6 +1080,16 @@ Internet-Draft           Token Binding over HTTP           November 2017
    client, and gaining access to the client's data at the server.  The
    Token Binding protocol, in this case, did not successfully bind the
    cookie to the client.
+
+   例如，客户端令牌绑定私钥必须被客户端保密。如果私钥不保密，那么系统中的
+另一个角色能产生一个正确的令牌绑定头部域，冒充这个客户端。这可以使协议的主
+要目的是将承载令牌绑定到某些客户端。 例如，考虑一个攻击者（可能通过网络入侵）
+获取客户端与特定服务器一起使用的身份验证Cookie。 进一步考虑服务器将该cookie
+绑定到客户端的令牌绑定ID，以防止滥用cookie。 如果攻击者拥有了客户的私钥，
+那么他可以与服务器建立一个TLS连接，并制作一个Sec-Token-Binding头域，该头
+域与cookie中存在的绑定相匹配，从而成功地作为客户端进行身份验证， 并在服务
+器上访问客户端的数据。 令牌绑定协议，在这种情况下，没有成功地绑定到客户端
+的cookie。
 
    Likewise, we need integrity protection of the Sec-Token-Binding
    header field.  A client should not be tricked into sending a Sec-
@@ -1089,6 +1117,17 @@ Internet-Draft           Token Binding over HTTP           November 2017
    key pair, when in fact it does not (the attacker A controls the key
    pair).
 
+   同样，我们需要对Sec-Token-Binding头域的完整性保护。不应该欺骗客户端
+发送Sec-Token-Binding头域到服务器，该服务器包含有关客户端不能控制的密钥
+对的令牌绑定消息。考虑攻击者A以某种方式知道客户端C和服务器S之间的TLS连接
+的导出密钥材料（EKM）（虽然这是不太可能的，但也不是完全不可能的，因为客
+户端可能不把EKM作为一个秘密 - 毕竟，一个抗映像前的哈希函数已经被应用到
+TLS主密钥上，使得知道EKM的人不可能恢复TLS主密钥，这样的考虑可能会导致一
+些客户端不要把EKM作为秘密）。这样的攻击者A可以用A的密钥对在C的EKM上制作
+一个Sec-Token-Binding头域。如果攻击者现在可以诱骗C将这样一个头字段发送给
+S，那么对于S来说，就好像C控制某个密钥对一样，实际上它不（攻击者A控制密钥
+对）。
+
    If A has a pre-existing relationship with S (perhaps has an account
    on S), it now appears to the server S as if A is connecting to it,
    even though it is really C.  (If the server S does not simply use
@@ -1103,12 +1142,26 @@ Internet-Draft           Token Binding over HTTP           November 2017
    example, if S has a feature that lets account holders see their
    activity history on S).
 
+   如果A与S有一个预先存在的关系（可能在S上有一个帐户），现在对于服务器
+S来说就好像A正在连接到它，即使它真的是C.（如果服务器S不是简单地使用 令
+牌绑定ID来标识客户端，但也使用绑定的身份验证cookie，那么A也将欺骗C将A的
+cookie中的一个发送给S，这可以通过多种方式来完成 - 通过JavaScript API插入
+Cookie，设置Cookie 相关域攻击等等）。换句话说，A欺骗C在S上登录到A的账户。
+这可能导致C的隐私损失，因为A大概有其他方式可以访问账户，因此可以 间接观
+察A的行为（例如，如果S有一个功能，可以让账户持有人在S上看到他们的活动历
+史）。
+
    Therefore, we need to protect the integrity of the Sec-Token-Binding
    header field.  One eTLD+1 should not be able to set the Sec-Token-
    Binding header field (through a DOM API or otherwise) that the User
    Agent uses with another eTLD+1.  Employing the "Sec-" header field
    prefix helps to meet this requirement by denoting the header field
    name to be a "forbidden header name", see [fetch-spec].
+
+   因此，我们需要保护Sec-Token-Binding头域的完整性。 一个eTLD + 1不应
+该能设置用户代理使用另一个eTLD + 1的Sec-Token-Binding头域（通过DOM API
+或其他方式）。 使用“Sec-”头字段前缀有助于通过将头字段名称指定为“禁止
+头名称”来满足此要求，请参见[fetch-spec]。
 
 7.4.  Securing Federated Sign-On Protocols
 
